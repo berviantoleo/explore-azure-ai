@@ -1,10 +1,23 @@
 using ExploreAzureAi.Components;
+using Microsoft.Azure.CognitiveServices.Vision.ComputerVision;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+
+var key = builder.Configuration["Vision:ApiKey"];
+var endpoint = builder.Configuration["Vision:Endpoint"];
+if (!string.IsNullOrWhiteSpace(key) && !string.IsNullOrWhiteSpace(endpoint))
+{
+    var computerVisionClient = new ComputerVisionClient(new ApiKeyServiceClientCredentials(key))
+    {
+        Endpoint = endpoint
+    };
+    builder.Services.AddSingleton<IComputerVisionClient>(computerVisionClient);
+}
+
 
 var app = builder.Build();
 
