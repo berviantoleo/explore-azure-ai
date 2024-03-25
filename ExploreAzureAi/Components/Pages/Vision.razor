@@ -1,0 +1,92 @@
+@page "/vision"
+@rendermode InteractiveServer
+@using System
+@using System.IO
+@using Microsoft.AspNetCore.Hosting
+@using Microsoft.Azure.CognitiveServices.Vision.ComputerVision
+@inject ILogger<Vision> Logger
+@inject IWebHostEnvironment Environment
+@inject IComputerVisionClient VisionClient
+
+<h3>Analyze Image</h3>
+
+<InputFile OnChange="@LoadFiles" />
+
+@if (isGenerateResult)
+{
+  <p>Generating result...</p>
+}
+
+@if (!string.IsNullOrEmpty(ErrorMessage))
+{
+  <p>@ErrorMessage</p>
+}
+
+@foreach (var result in results)
+{
+  <p>@result</p>
+}
+
+
+
+@code {
+  private long maxFileSize = 1024 * 1024 * 1024;
+  private List<string> results = new List<string>();
+  private bool isGenerateResult = false;
+  private string ErrorMessage = string.Empty;
+
+  private async Task LoadFiles(InputFileChangeEventArgs e)
+  {
+    if (VisionClient == null)
+    {
+      return;
+    }
+    var files = e.GetMultipleFiles(1);
+    if (files.Count != 1)
+    {
+      return;
+    }
+    var isError = false;
+    try
+    {
+
+      isGenerateResult = true;
+      results.Clear();
+
+      var file = files[0];
+      var trustedFileName = Path.GetTempFileName();
+
+      using (var fs = new FileStream(trustedFileName, FileMode.Create))
+      {
+        await file.OpenReadStream(maxFileSize).CopyToAsync(fs);
+      }
+      using var readFs = new FileStream(trustedFileName, FileMode.Open, FileAccess.Read);
+
+      Logger.LogInformation($"Detecting labels for {trustedFileName}");
+      var analyzeResponse = await VisionClient.AnalyzeImageInStreamAsync(readFs);
+      Logger.LogInformation($"Detected labels for {trustedFileName}");
+      if (analyzeResponse == null)
+      {
+        Logger.LogInformation("Response return null");
+        return;
+      }
+      var message = System.Text.Json.JsonSerializer.Serialize(analyzeResponse);
+      Logger.LogInformation(message);
+      results.Add(message);
+    }
+    catch (Exception ex)
+    {
+      Logger.LogError(ex, "Something wrong");
+      ErrorMessage = ex.ToString();
+      isError = true;
+    }
+
+    if (!isError)
+    {
+      ErrorMessage = string.Empty;
+    }
+
+
+    isGenerateResult = false;
+  }
+}
